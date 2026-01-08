@@ -122,10 +122,8 @@ public class RouteHandler extends RouterNanoHTTPD.DefaultHandler {
 
         // Else, allow the first host (to somewhat keep old behavior for backwards compatibility)
         String firstHost = normalizedAllowedHosts.get(0);
-        if (!firstHost.isEmpty()) {
-            rep.addHeader("Access-Control-Allow-Origin", firstHost);
-            rep.addHeader("Access-Control-Allow-Headers", "*");
-        }
+        rep.addHeader("Access-Control-Allow-Origin", firstHost);
+        rep.addHeader("Access-Control-Allow-Headers", "*");
     }
 
     // Trim and remove trailing slash from a host

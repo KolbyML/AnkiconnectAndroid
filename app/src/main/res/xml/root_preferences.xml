@@ -28,6 +28,7 @@
                 app:dialogTitle="Enter CORS Host"
                 app:key="cors_host"
                 app:title="CORS Host"
+                android:defaultValue="*"
                 app:useSimpleSummaryProvider="true" />
 
     </PreferenceCategory>

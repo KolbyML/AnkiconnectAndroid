@@ -3,15 +3,21 @@ package com.kamwithk.ankiconnectandroid.ankidroid_api;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.TextUtils;
+import android.util.Log;
+import android.view.WindowManager;
 import android.widget.Toast;
+import androidx.appcompat.app.AlertDialog;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
+import androidx.preference.PreferenceManager;
 
 import java.io.IOException;
 import java.util.*;
@@ -55,6 +61,64 @@ public class IntegratedAPI {
     //public File getExternalFilesDir() {
     //    return context.getExternalFilesDir(null);
     //}
+
+    // --- Added for CORS Handshake ---
+    public String requestPermissionHandshake(String origin) {
+        if (origin == null || origin.isEmpty() || origin.equals("null")) {
+            return "{\"result\": {\"permission\": \"denied\"}}";
+        }
+
+        // 1. Check if the origin is already whitelisted
+        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context); //
+        String currentHosts = prefs.getString("cors_host", ""); //
+
+        // Use a simple containment check or split by newline to be precise
+        List<String> hostsList = Arrays.asList(currentHosts.split("\\r?\\n"));
+        if (hostsList.contains(origin) || currentHosts.equals("*")) {
+            // Origin already allowed, return success immediately without a dialog
+            return "{\"result\": {\"permission\": \"granted\"}}";
+        }
+
+        // 2. Only trigger the prompt if the origin is unknown
+        new Handler(Looper.getMainLooper()).post(() -> { //
+            try {
+                // Use a ContextThemeWrapper to prevent crashes in background services
+                Context themeContext = new androidx.appcompat.view.ContextThemeWrapper(
+                        context, androidx.appcompat.R.style.Theme_AppCompat_Dialog);
+
+                AlertDialog.Builder builder = new AlertDialog.Builder(themeContext);
+                builder.setTitle("Connection Request");
+                builder.setMessage("Allow the application at " + origin + " to connect to AnkiConnect?");
+                builder.setPositiveButton("Allow", (dialog, which) -> addOriginToWhitelist(origin)); //
+                builder.setNegativeButton("Deny", null);
+
+                AlertDialog alert = builder.create();
+                if (alert.getWindow() != null) {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        alert.getWindow().setType(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY); //
+                    } else {
+                        alert.getWindow().setType(WindowManager.LayoutParams.TYPE_PHONE); //
+                    }
+                }
+                alert.show(); //
+            } catch (Exception e) {
+                Log.e("AnkiConnectAndroid", "Failed to show permission dialog: " + e.getMessage()); //
+            }
+        });
+
+        return "{\"result\": {\"permission\": \"granted\"}}";
+    }
+    
+    private void addOriginToWhitelist(String origin) {
+        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
+        String currentHosts = prefs.getString("cors_host", "");
+        if (!currentHosts.contains(origin)) {
+            String newHosts = currentHosts.isEmpty() ? origin : currentHosts + "\n" + origin;
+            prefs.edit().putString("cors_host", newHosts).apply();
+            Toast.makeText(context, "Added " + origin + " to whitelist", Toast.LENGTH_SHORT).show();
+        }
+    }
+    // --------------------------------
 
     public void addSampleCard() {
         Map<String, String> data = new HashMap<>();

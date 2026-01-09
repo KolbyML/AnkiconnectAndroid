@@ -48,14 +48,15 @@ public class RouteHandler extends RouterNanoHTTPD.DefaultHandler {
         return NanoHTTPD.Response.Status.OK;
     }
 
+    @Override
     public NanoHTTPD.Response get(RouterNanoHTTPD.UriResource uriResource, Map<String, String> urlParams, NanoHTTPD.IHTTPSession session) {
-//        Setup
+        // Setup
         Context context = uriResource.initParameter(0, Context.class);
         if (apiHandler == null) {
             apiHandler = new APIHandler(new IntegratedAPI(context), context);
         }
 
-//        Enforce UTF-8 encoding (response doesn't always contain by default)
+        // Enforce UTF-8 encoding
         session.getHeaders().put("content-type", contentType);
 
         Map<String, String> files = new HashMap<>();
@@ -65,15 +66,21 @@ public class RouteHandler extends RouterNanoHTTPD.DefaultHandler {
             e.printStackTrace();
         }
 
+        // Extract Origin for the permission handshake
+        String origin = session.getHeaders().get("origin");
+        if (origin == null) {
+            origin = session.getHeaders().get("Origin");
+        }
+
         Map<String, List<String>> parameters = session.getParameters();
-        if (parameters == null || parameters.isEmpty() && files.get("postData") == null) {
+        if (parameters == null || (parameters.isEmpty() && files.get("postData") == null)) {
             // No data was provided in the POST request so we return a simple response
             NanoHTTPD.Response rep = newFixedLengthResponse("Ankiconnect Android is running.");
             addCorsHeaders(context, rep, session);
             return rep;
         }
 
-        NanoHTTPD.Response rep = apiHandler.chooseAPI(files.get("postData"), parameters);
+        NanoHTTPD.Response rep = apiHandler.chooseAPI(files.get("postData"), parameters, origin);
 
         // Include this header so that if a public origin is included in the whitelist, then browsers
         // won't fail due to the private network access check

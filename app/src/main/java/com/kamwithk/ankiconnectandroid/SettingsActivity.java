@@ -2,6 +2,7 @@ package com.kamwithk.ankiconnectandroid;
 
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.view.LayoutInflater;
@@ -16,6 +17,7 @@ import androidx.appcompat.widget.Toolbar;
 import androidx.preference.EditTextPreference;
 import androidx.preference.ListPreference;
 import androidx.preference.Preference;
+import androidx.preference.PreferenceManager;
 import androidx.preference.PreferenceFragmentCompat;
 
 import com.google.android.material.snackbar.Snackbar;
@@ -175,6 +177,42 @@ public class SettingsActivity extends AppCompatActivity {
                     }
                     return true;
                 });
+            }
+        }
+
+        @Override
+        public void onResume() {
+            super.onResume();
+            if (isAdded()) {
+                refreshCorsPreference();
+            }
+        }
+
+        /**
+         * Pulls the latest CORS whitelist from SharedPreferences and
+         * updates the UI element to match.
+         */
+        private void refreshCorsPreference() {
+            EditTextPreference corsHostPreference = findPreference("cors_host");
+            Context context = getContext();
+
+            if (corsHostPreference != null && context != null) {
+                SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
+                String currentHosts = prefs.getString("cors_host", "");
+
+                // 1. Update the internal text value
+                corsHostPreference.setText(currentHosts);
+
+                // 2. CRITICAL FIX: Disable the automatic SummaryProvider to prevent the crash
+                corsHostPreference.setSummaryProvider(null);
+
+                // 3. Manually set the summary text
+                if (currentHosts != null && !currentHosts.trim().isEmpty()) {
+                    // Display hosts on the settings screen, replacing newlines with commas for readability
+                    corsHostPreference.setSummary(currentHosts.replace("\n", ", "));
+                } else {
+                    corsHostPreference.setSummary("No hosts whitelisted");
+                }
             }
         }
     }

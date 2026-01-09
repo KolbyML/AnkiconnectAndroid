@@ -7,8 +7,10 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.provider.Settings;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
@@ -81,6 +83,24 @@ public class MainActivity extends AppCompatActivity {
                     }
                     startService();
                 });
+
+        checkOverlayPermission();
+    }
+
+    /**
+     * Guides the user to enable 'Display over other apps' if not already granted.
+     * This is required for the CORS handshake dialog to appear in the background.
+     */
+    private void checkOverlayPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (!Settings.canDrawOverlays(this)) {
+                Toast.makeText(this, "Please enable 'Display over other apps' to allow connection requests", Toast.LENGTH_LONG).show();
+                
+                Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        Uri.parse("package:" + getPackageName()));
+                startActivity(intent);
+            }
+        }
     }
 
     @Override
@@ -128,7 +148,6 @@ public class MainActivity extends AppCompatActivity {
             // Directly ask for the permission.
             requestPermissionLauncher.launch(POST_NOTIFICATIONS);
         }
-
     }
 
     public void startServiceWithoutNotifications() {
@@ -140,7 +159,6 @@ public class MainActivity extends AppCompatActivity {
         Intent serviceIntent = new Intent(this, Service.class);
         ContextCompat.startForegroundService(this, serviceIntent);
     }
-
 
     public void startServiceBtn(View view) {
         boolean notificationsEnabled = notificationManager.areNotificationsEnabled();

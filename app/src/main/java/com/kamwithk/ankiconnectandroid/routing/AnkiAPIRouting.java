@@ -26,7 +26,6 @@ import static fi.iki.elonen.NanoHTTPD.newFixedLengthResponse;
 
 import android.util.Log;
 
-
 public class AnkiAPIRouting {
     private final IntegratedAPI integratedAPI;
     private final DeckAPI deckAPI;
@@ -40,7 +39,7 @@ public class AnkiAPIRouting {
         mediaAPI = integratedAPI.mediaAPI;
     }
 
-    private String findRoute(JsonObject raw_json) throws Exception {
+    private String findRoute(JsonObject raw_json, String origin) throws Exception {
         switch (Parser.get_action(raw_json)) {
             case "version":
                 return version();
@@ -70,16 +69,21 @@ public class AnkiAPIRouting {
                 return storeMediaFile(raw_json);
             case "notesInfo":
                 return notesInfo(raw_json);
+            case "requestPermission": // Restored missing case
+                return integratedAPI.requestPermissionHandshake(origin);
             case "multi":
                 JsonArray actions = Parser.getMultiActions(raw_json);
                 JsonArray results = new JsonArray();
 
                 for (JsonElement jsonElement : actions) {
-                    int version = Parser.get_version(jsonElement.getAsJsonObject(), 4);
-                    String routeResult = findRoute(jsonElement.getAsJsonObject());
+                    JsonObject actionObj = jsonElement.getAsJsonObject();
+                    int multiVersion = Parser.get_version(actionObj, 4);
+
+                    // Call findRoute for each sub-action
+                    String routeResult = findRoute(actionObj, origin);
 
                     JsonElement routeResultJson = JsonParser.parseString(routeResult);
-                    JsonElement response = formatSuccessReply(routeResultJson, version);
+                    JsonElement response = formatSuccessReply(routeResultJson, multiVersion);
                     results.add(response);
                 }
 
@@ -88,7 +92,7 @@ public class AnkiAPIRouting {
                 return default_version();
         }
     }
-    /* taken from anki-connect's web.py: format_success_reply */
+
     public JsonElement formatSuccessReply(JsonElement raw_json, int version) {
         if (version <= 4) {
             return raw_json;
@@ -100,29 +104,27 @@ public class AnkiAPIRouting {
         }
     }
 
-    public NanoHTTPD.Response findRouteHandleError(JsonObject raw_json) {
+    // Restored the missing method signature that APIHandler calls
+    public NanoHTTPD.Response findRouteHandleError(JsonObject raw_json, String origin) {
         try {
-            int version = Parser.get_version(raw_json, 4);
-            String response = formatSuccessReply(JsonParser.parseString(findRoute(raw_json)), version).toString();
-            Log.d("AnkiConnectAndroid", "response json: " + response);
-            return returnResponse(response);
+            int requestVersion = Parser.get_version(raw_json, 4);
+            String routeResult = findRoute(raw_json, origin);
+
+            JsonElement responseJson = formatSuccessReply(JsonParser.parseString(routeResult), requestVersion);
+            String responseString = Parser.gson.toJson(responseJson);
+
+            Log.d("AnkiConnectAndroid", "response json: " + responseString);
+            return returnResponse(responseString);
         } catch (Exception e) {
-            Map<String, String> response = new HashMap<>();
+            Map<String, Object> response = new HashMap<>();
             response.put("result", null);
 
             StringWriter sw = new StringWriter();
-            try {
-                try (PrintWriter pw = new PrintWriter(sw)) {
-                    e.printStackTrace(pw);
-                }
-                response.put("error", e.getMessage() + sw);
-            } finally {
-                try {
-                    sw.close();
-                } catch (IOException ex) {
-                    ex.printStackTrace();
-                }
+            try (PrintWriter pw = new PrintWriter(sw)) {
+                e.printStackTrace(pw);
+                response.put("error", e.getMessage() + "\n" + sw.toString());
             }
+
             return newFixedLengthResponse(NanoHTTPD.Response.Status.OK, "text/json", Parser.gson.toJson(response));
         }
     }
@@ -189,7 +191,7 @@ public class AnkiAPIRouting {
         return Parser.gsonNoSerialize.toJson(integratedAPI.canAddNotesWithErrorDetail(notes_to_test));
     }
 
-    /**
+    /*
      * Add a new note to Anki.
      * The note can include media files, which will be downloaded.
      * AnkiConnect desktop also supports other formats, but this method only supports downloadable media files.
